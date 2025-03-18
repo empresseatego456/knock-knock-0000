@@ -3,26 +3,17 @@ import fs from 'fs';
 import dotenv from 'dotenv';
 import Instagram from 'instagram-web-api';
 dotenv.config();
-import logger from './winston/configWinston';
 import axios from 'axios';
-import { current_search_image } from '.';
 
+const TITLES_PATH = './instagram/titles_post.txt';
+
+// Conection to the account
 const { INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD } = process.env;
 const client = new Instagram({
   username: INSTAGRAM_USERNAME,
   password: INSTAGRAM_PASSWORD
-})
-
+});
 let isLogged = false;
-let imagesProcessed: object;
-
-interface IStartInstaPost {
-  search_name: string;
-}
-
-interface IGetImages {
-  search_name: string;
-}
 
 export function startRandomTimeInstagram() {
 
@@ -30,89 +21,107 @@ export function startRandomTimeInstagram() {
 
     const minute = 60 * 1000;
     const max_minutes = 5;
-    const tiempo = Math.round(Math.random() * (minute * max_minutes));
+    const tiempo = Math.round(
+      Math.random() * (minute * max_minutes)
+    );
 
     setTimeout(async () => {
-      const titulos = definirTitulos();
-      const images = await getImages({ search_name: current_search_image });
-      if (titulos && images) {
-        await postInInstragram(titulos, images);
+      const titles = defineTitles();
+      const images = await getImage();
+      if (titles && images) {
+        await postInInstragram(titles, images);
       }
       startRandomTimeInstagram();
     }, tiempo);
 
   } catch (error) {
-    console.error('Error on instapost worker');
-    logger.error(error);
-    logger.error(imagesProcessed);
-  }
 
+    console.error('Error on instapost worker => ', error);
+
+  }
 
 }
 
-async function getImages({ search_name }: IGetImages) {
+// Taking the image from somewhere
+async function getImage() {
+
   try {
-    const response = await axios.get('' + search_name);
+
+    const response = await axios.get('');
     return response.data.message;
+
   } catch (error) {
-    console.error('error on getting images');
-    console.error(error);
-    logger.error(error);
+
+    console.error('error on getting images => ', error);
+
   }
+
 }
 
-async function postInInstragram(titulos: string[], images: string[]) {
+async function postInInstragram(titles: string[], images: string[]) {
 
   try {
 
-    if (notHaveContent(titulos)) return;
+    if (notHaveContent(titles)) return;
     const resultRandomImage = images[
       Math.round(Math.random() * (images.length))
     ];
     if (!resultRandomImage) return;
+
     const image = resultRandomImage;
-    const titulo = titulos[0];
+    const title = titles[0];
 
     if (!isLogged) {
-      const response = await client.login({
+
+      await client.login({
         username: INSTAGRAM_USERNAME,
         password: INSTAGRAM_PASSWORD
       }, { _sharedData: false });
       isLogged = true;
       console.log('Login success!');
+
     }
-    console.log('uploading image => ', image);
+
     const { media } = await client.uploadPhoto({
       photo: image,
-      caption: titulo,
+      caption: title,
       post: 'feed',
     });
-    console.log(`upload result => https://www.instagram.com/p/${media.code}/`)
-    logger.log('image', 'https://www.instagram.com/p/${media.code}/');
-    titulos.shift()
-    fs.writeFileSync('./instagram/titulos_posteos.txt', titulos.join('-'));
+
+    console.log(`[ Result ] uploaded => https://www.instagram.com/p/${media.code}/`)
+    titles.shift()
+    fs.writeFileSync(TITLES_PATH, titles.join('-'));
 
   } catch (error) {
+
     isLogged = false;
-    titulos.shift();
-    fs.writeFileSync('./instagram/titulos_posteos.txt', titulos.join('-'));
-    logger.error(error);
+    titles.shift();
+    fs.writeFileSync(TITLES_PATH, titles.join('-'));
     console.error(error);
+
   }
 
 }
 
-function definirTitulos() {
+function defineTitles() {
+
   try {
-    const contenidoTiutlos = fs.readFileSync('./instagram/titulos_posteos.txt');
+
+    const contenidoTiutlos = fs.readFileSync(TITLES_PATH);
     const titulos = contenidoTiutlos.toString().split('-');
     return titulos;
+
   } catch (error) {
-    console.error('error defining titles');
-    logger.error(error);
+
+    console.error('error defining titles => ', error);
+
   }
+
 }
 
 function notHaveContent(titles: string[]) {
+
   if (titles[0] == '' || titles.length == 0) return true;
+
 }
+
